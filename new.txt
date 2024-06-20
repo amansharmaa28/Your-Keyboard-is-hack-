@@ -1,0 +1,1879 @@
+using Microsoft.AspNetCore.Authentication;
+
+namespace Synergy.Bls.Esp.Areas.Mar.Controllers
+{
+    [Area(BlsAppointmentConstant.AreaName)]
+    public class AccountController : AreaBaseController
+    {
+       
+        private readonly IServiceProvider _serviceProvider;
+        private readonly IMapper _autoMapper;
+        private List<string> Styles { get; set; }
+        private Random random;
+
+        public AccountController(IConfiguration config, IMapper autoMapper,
+            AuthSignInManager<ApplicationIdentityUser> customUserManager
+            , 
+        {
+            _config = config;
+            _customUserManager = customUserManager;
+            _repo = repo;
+            _userContext = userContext;
+            _logger = logger;
+        
+        }
+        public IActionResult Index()
+        {
+            return View();
+        }
+
+        public IActionResult Unauthorized()
+        {
+            return View();
+        }
+        public IActionResult AccessDenied(string returnUrl)
+        {
+            return RedirectToAction("Login", "Account", new { @area = BlsAppointmentConstant.AreaName, returnUrl = returnUrl });
+        }
+
+        public async Task<IActionResult> Index(string returnUrl)
+        {
+            BlsUserViewModel model = new();
+            model.CaptchaId = await GetCaptcha();
+            ViewBag.CaptchaParam = string.Concat("data=", System.Web.HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(model.CaptchaId)));
+            return View(model);
+        }
+
+        public async Task<IActionResult> Login(string returnUrl, bool timeOut = false)
+        {
+            var ipAddress = GetIPAddress();
+            BlsUserViewModel model = new();
+            mod
+        public async Task<IActionResult> AgentLogin(string returnUrl, bool timeOut = false)
+        {
+            var ipAddress = GetIPAddress();
+          n(model);
+            ViewBag.TimeOut = timeOut;
+            return View(model);
+        }
+        private async Task GenerateScriptForLogin(BlsUserViewModel model)
+        {
+            random = new Random();
+            StyleNames = new List<string>();
+            model.PositionNo = random.Next(1, 6);
+           "UserId{userIdIndex}|Password{pwdIndex}|{Guid.NewGuid()}");
+            model.ScriptItemList = new List<ScriptItemViewModel>();
+            var emailText = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Email;
+            model.ScriptItemList.Add(new ScriptItemViewModel
+            {
+                BaseName = "UserId",
+                Start = 1,
+                End = 10,
+                Actual = userIdIndex,
+                Content = @$"<div class=""mb-3 position-relative #STYLE#"">
+                                <label class=""form-label"" for=""UserId#INDEX#"">{emailText}<span class=""required"">*</span></label>
+                                <input autocomplete=""off"" id=""UserId#INDEX#"" name=""UserId#INDEX#"" class=""form-control entry-disabled"" #REQ# type = ""text"">
+                            </div>"
+            });
+            var pwdText = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Password;
+            model.ScriptItemList.Add(new ScriptItemViewModel
+            {
+                BaseName = "Password",
+                Start = 1,
+                End = 10,
+                Actual = pwdIndex,
+                Content = @$"<div class=""mb-3 position-relative #STYLE#"">
+	                            <label class=""form-label"" for=""Password#INDEX#"">{pwdText}<span class=""required"">*</span></label>
+	                            <input autocomplete=""off"" id=""Password#INDEX#"" name=""Password#INDEX#"" class=""form-control fakepassword entry-disabled"" #REQ# type=""password"" >
+	                            <span class=""position-absolute top-50 end-0 translate-middle-y p-0 mt-3"">
+		                            <i class=""fakepasswordicon fas fa-eye-slash cursor-pointer p-2"" onclick='togglepwd();'></i>
+	                            </span>
+                                #VK#
+                            </div>"
+            });
+
+
+
+            var enableVirtualKeyboard = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableVirtualKeyboard, BlsAppointmentConstant.CountryId);
+            var allScripts = GenerateJavascripts(model);
+            Shuffle<string>(random, allScripts.Item1);
+            Shuffle<string>(random, allScripts.Item2);
+            model.Script = $"$(function(){{{string.Join("();", allScripts.Item1)}();}});{string.Join("", allScripts.Item2)}";
+            var allStyles = GenerateCss();
+            model.Style = string.Join("", allStyles.Item2);
+            model.ScriptItemAllList = new List<ScriptItemViewModel>();
+            foreach (var item in model.ScriptItemList)
+            {
+                var s = item.Start;
+                while (s <= item.End)
+                {
+                    var next = random.Next(10, allStyles.Item1.Count);
+                    item.StyleList = allStyles.Item1.GetRange(0, next);
+                    var vk = "";
+                    if (s == item.Actual)
+                    {
+                        Shuffle<string>(random, allStyles.Item3);
+                        item.StyleList.Add(allStyles.Item3.FirstOrDefault());
+                        Shuffle<string>(random, item.StyleList);
+                        if (item.BaseName == "Password" && enableVirtualKeyboard)
+                        {
+                            //vk = @$"<script> $(function () {{
+                            //    $('#Password{s}').keyboard({{
+                            //        layout: 'qwerty',
+                            //        usePreview:false,
+                            //        lockInput:true,
+                            //        css: {{ 
+                            //            input: 'form-control input-sm', 
+                            //            container: 'center-block dropdown-menu',  
+                            //            buttonDefault: 'btn btn-default', 
+                            //            buttonHover: 'btn-primary', 
+                            //            buttonAction: 'active', 
+                            //            buttonDisabled: 'disabled',
+                            //        }}
+                            //    }}).addScramble({{ 
+                            //        targetKeys: /[a-z\d]/i, 
+                            //        byRow: true, 
+                            //        byKeySet: true, 
+                            //        randomizeOnce: true
+                            //    }});
+                            //}});</script>";
+                        }
+                        model.ScriptItemAllList.Add(new ScriptItemViewModel
+                        {
+                            Content = item.Content.Replace("#STYLE#", string.Join(" ", item.StyleList)).Replace("#INDEX#", s.ToString()).Replace("#REQ#", "required").Replace("#VK#", vk),
+                            BaseName = item.BaseName
+                        });
+                    }
+                    else
+                    {
+                        Shuffle<string>(random, allStyles.Item4);
+                        item.StyleList.Add(allStyles.Item4.FirstOrDefault());
+                        Shuffle<string>(random, item.StyleList);
+                        model.ScriptItemAllList.Add(new ScriptItemViewModel
+                        {
+                            Content = item.Content.Replace("#STYLE#", string.Join(" ", item.StyleList)).Replace("#INDEX#", s.ToString()).Replace("#REQ#", "").Replace("#VK#", ""),
+                            BaseName = item.BaseName
+                        });
+                    }
+                    s++;
+                }
+            }
+
+        }
+
+        private Tuple<List<string>, List<string>, List<string>, List<string>> GenerateCss()
+        {
+            var fns = new List<string>();
+            var fnContent = new List<string>();
+            var next = random.Next(5, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{z-index:", random.Next(1000, 2000), ";}");
+                fns.Add(cName);
+                fnContent.Add(st);
+            }
+            next = random.Next(5, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{display:none !important;z-index:", random.Next(1000, 2000), " !impotant;}");
+                fnContent.Add(st);
+            }
+            next = random.Next(5, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{display:block !important;z-index:", random.Next(1000, 2000), " !impotant;}");
+                fnContent.Add(st);
+            }
+            next = random.Next(5, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{display:block !important;}");
+                fnContent.Add(st);
+            }
+            next = random.Next(5, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{display:none !important;}");
+                fnContent.Add(st);
+            }
+            next = random.Next(25, 50);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                fns.Add(cName);
+            }
+
+            var displayList = new List<string>();
+            next = random.Next(10, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{display:block !important;}");
+                displayList.Add(cName);
+                fnContent.Add(st);
+
+            }
+            var hideList = new List<string>();
+            next = random.Next(10, 25);
+            for (int i = 0; i < next; i++)
+            {
+                var cName = GenerateRandomString(random);
+                var st = string.Concat(".", cName, "{display:none !important;}");
+                hideList.Add(cName);
+                fnContent.Add(st);
+
+            }
+
+            return new Tuple<List<string>, List<string>, List<string>, List<string>>(fns, fnContent, displayList, hideList);
+        }
+        private Tuple<List<string>, List<string>> GenerateJavascripts(BlsUserViewModel model)
+        {
+            var fns = new List<string>();
+            var fnContent = new List<string>();
+            var next = random.Next(5, 10);
+            for (int i = 0; i < next; i++)
+            {
+                var fn = GenerateReturnScript(model);
+                fns.Add(fn.Item1);
+                fnContent.Add(fn.Item2);
+            }
+            next = random.Next(5, 10);
+            for (int i = 0; i < next; i++)
+            {
+                var fn = GenerateTryCatchScript(model);
+                fns.Add(fn.Item1);
+                fnContent.Add(fn.Item2);
+            }
+
+
+            return new Tuple<List<string>, List<string>>(fns, fnContent);
+        }
+        private Tuple<string, string> GenerateReturnScript(BlsUserViewModel model)
+        {
+            var fnName = GenerateRandomString(random);
+            var str = $"function {fnName}(){{try{{return false;";
+            foreach (var item in model.ScriptItemList)
+            {
+                var next = random.Next(item.Start, item.End + 1);
+                str = string.Concat(str, $"$('#'+document.getElementById('", item.BaseName, next, "').id).show();");
+            }
+            str = string.Concat(str, "}catch(er){console.log(er);}}");
+            return new Tuple<string, string>(fnName, str);
+        }
+        private Tuple<string, string> GenerateTryCatchScript(BlsUserViewModel model)
+        {
+            var fnName = GenerateRandomString(random);
+            var str = $"function {fnName}(){{try{{";
+            foreach (var item in model.ScriptItemList)
+            {
+                var next = random.Next(item.End + 1, item.End + 10);
+                var next2 = random.Next(item.Start, item.End + 1);
+                str = string.Concat(str, $"$('#'+document.getElementById('", item.BaseName, next, "').id).show();$('#'+document.getElementById('", item.BaseName, next2, "').id).show();");
+            }
+            str = string.Concat(str, "}catch(er){console.log(er);}}");
+            return new Tuple<string, string>(fnName, str);
+        }
+        public async Task<IActionResult> SessionExpired()
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ServiceFilter(typeof(AddHeaderFilter))]
+        public async Task<IActionResult> Login(BlsUserViewModel model)
+        {
+            var err = "";
+            var ip = GetIPAddress();
+            if (model.ScriptData.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Invalidselection;
+                return Json(new { success = false, error = err });
+                //return Json(new { success = false, error = "Please enter user id" });
+            }
+            var validateCaptcha = ValidateCaptcha(model.CaptchaData, model.CaptchaId);
+            if (!validateCaptcha.Item1)
+            {
+                return validateCaptcha.Item2;
+            }
+            var verifyData = await VerifySubmittedData(model);
+            if (verifyData.Item1 == false)
+            {
+                return Json(new { success = false, error = verifyData.Item1, bot = true });
+            }
+            if (model.UserId.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Pleaseenteruserid;
+                return Json(new { success = false, error = err });
+                //return Json(new { success = false, error = "Please enter user id" });
+            }
+
+            if (model.Password.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Pleaseenterpassword;
+                return Json(new { success = false, error = err });
+                //return Json(new { success = false, error = "Please enter password" });
+            }
+            if (!ModelState.IsValid)
+            {
+                // return await LogLogin(model, new { success = false, error = "Please enter valid user id and password" });
+                await LogLogin(model, new { success = false, error = "Please enter valid user id and password" });
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Pleaseentervaliduseridandpassword;
+                return Json(new { success = false, error = err });
+            }
+
+            var returnUrl = model.ReturnUrl ?? Url.Content("~/");
+            model.Email = model.UserId;
+            model.Password = BlsAreaHelper.Encrypt(model.Password);
+            Task log = null;
+            try
+            {
+                var user = await _blsBusiness.ValidateAppointmentUser(model.Email, model.Password, BlsAppointmentConstant.CountryId);
+
+                if (user != null)
+                {
+                    log = _blsBusiness.InsertBlsClientRequest(new BlsClientRequest
+                    {
+                        IpAddress = GetIPAddress(),
+                        UserId = user.Id,
+                        MethodName = "LoginPost",
+                        RequestUrl = HttpContext.Request.Path.ToString()
+
+                    });
+                    if (user.Error.IsNotNullAndNotEmpty())
+                    {
+                        return await LogLogin(model, new { success = false, error = user.Error });
+                    }
+                    var response = new ApplicationIdentityUser
+                    {
+                        success = true,
+                        Id = user.Id,
+                        UserName = user.Name,
+                        IsSystemAdmin = user.IsSystemAdmin,
+                        Email = user.Email,
+                        MobileNumber = user.Mobile,
+                        UserUniqueId = user.Email,
+                        CompanyId = user.CompanyId,
+                        CompanyCode = user.CompanyCode,
+                        CompanyName = user.CompanyName,
+                        JobTitle = user.JobTitle,
+                        PhotoId = user.PhotoId,
+                        LegalEntityId = user.LegalEntityId,
+                        LegalEntityCode = user.LegalEntityCode,
+                        IsPasswordChanged = user.PasswordChanged,
+                        UserId = model.UserId,
+                        UserType = user.UserType.Value,
+                        LoginTime = DateTime.Now,
+                        DataProtectionAccepted = user.DataProtectionConsentEmailAccepted,
+                        IpAddress = ip
+
+                    };
+                    response.CultureCode = _userContext.CultureCode;
+                    response.CultureName = _userContext.CultureName;
+                    response.MapClaims();
+                    var identity = new ClaimsIdentity(response.Claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                    var principal = new ClaimsPrincipal(identity);
+                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties()
+                    {
+                        IsPersistent = false,
+
+                    });
+                    var IsVerified = true;
+                    var mobileVerificationEnabled = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableMobileOtpVerification, BlsAppointmentConstant.CountryId);
+                    //var blsSettingsData = await _blsAppointmentBusiness.GetGeneralSettingsList();
+                    //if (blsSettingsData != null)
+                    //{
+                    //    mobileVerificationEnabled = Convert.ToBoolean(blsSettingsData.FirstOrDefault(x => x.Code == "ENABLE_MOBILE_VERIFICATION")?.Value);
+                    //}
+                    if (!user.IsEmailVerified || (!user.IsMobileVerified && mobileVerificationEnabled))
+                    {
+                        IsVerified = false;
+                    }
+                    var passwordChangeAlert = false;
+                    if (user.PasswordExpiryDate.HasValue && user.PasswordExpiryDate.Value < DateTime.Today)
+                    {
+                        passwordChangeAlert = true;
+                        response.IsPasswordChanged = false;
+                    }
+
+                    var r = await LogLogin(model, new { success = true, error = "" }, true, user);
+
+                    return Json(new { success = true, returnUrl = model.ReturnUrl, IsPasswordChanged = response.IsPasswordChanged, IsVerified = IsVerified, userId = user.Id, passwordChangeAlert = passwordChangeAlert });
+                }
+                else
+                {
+                    return await LogLogin(model, new { success = false, error = "Invalid User Id/Password" });
+                }
+            }
+            catch (Exception e)
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.ErrorInAuthentication;
+                return Json(new { success = false, error = err });
+            }
+            finally
+            {
+                if (log != null)
+                {
+                    await log;
+                }
+            }
+
+        }
+
+        private async Task<Tuple<bool, string>> VerifySubmittedData(BlsUserViewModel model)
+        {
+            model.IpAddress = GetIPAddress();
+            model.ScriptData = BlsAreaHelper.Decrypt(model.ScriptData);
+            var items = model.ScriptData.Split("|");
+            var userIdField = items[0];
+            var pwdField = items[1];
+            model.UserId = GetPropertyValue<string>(model, userIdField);
+            model.Password = GetPropertyValue<string>(model, pwdField);
+            //for (int i = 1; i <= 10; i++)
+            //{
+            //    var pField = $"Password{i}";
+            //    if (pField != pwdField)
+            //    {
+            //        var pData = GetPropertyValue<string>(model, pField);
+            //        if (pData.IsNotNullAndNotEmpty())
+            //        {
+            //            await _blsBusiness.ManageBlsClientRequest(new BlsClientRequest
+            //            {
+            //                IpAddress = model.IpAddress,
+            //                UserId = _userContext.UserId,
+            //                BotIdentified = true,
+            //                RequestUrl = "Login",
+            //                BotDescription = $"Hidden field {pField} got filled instead of {pwdField} in login page",
+            //                BlockedUntil = DateTime.Now.AddMinutes(BlsConstant.BotHiddenFieldLockingDurationInMinutes),
+            //                BlockingReason = "Identified hidden field filled"
+            //            }, true);
+            //            return new Tuple<bool, string>(false, "Bot identified");
+            //        }
+            //    }
+            //    var uidField = $"UserId{i}";
+            //    if (uidField != userIdField)
+            //    {
+            //        var userIdData = GetPropertyValue<string>(model, uidField);
+            //        if (userIdData.IsNotNullAndNotEmpty())
+            //        {
+            //            await _blsBusiness.ManageBlsClientRequest(new BlsClientRequest
+            //            {
+            //                IpAddress = model.IpAddress,
+            //                UserId = _userContext.UserId,
+            //                BotIdentified = true,
+            //                RequestUrl = "Login",
+            //                BotDescription = $"Hidden field {uidField} got filled instead of {userIdField} in login page",
+            //                BlockedUntil = DateTime.Now.AddMinutes(BlsConstant.BotHiddenFieldLockingDurationInMinutes),
+            //                BlockingReason = "Identified hidden field filled"
+            //            }, true);
+            //            return new Tuple<bool, string>(false, "Bot identified");
+            //        }
+
+            //    }
+
+
+            //}
+            return new Tuple<bool, string>(true, "");
+        }
+        public async Task<IActionResult> RateLimit()
+        {
+
+            return View();
+        }
+        public async Task<IActionResult> Bot()
+        {
+
+            return View();
+        }
+        private async Task<IActionResult> LogLogin(UserViewModel model, dynamic data, bool isSuccess = false, UserViewModel user = null)
+        {
+            //await _repo.Create<BlsUserLoginHistory, BlsUserLoginHistory>(new BlsUserLoginHistory
+            //{
+            //    UserId = model.UserId,
+            //    LoginDate = DateTime.Now,
+            //    LoginStatus = Convert.ToString(data.success),
+            //    LoginError = Convert.ToString(data.error),
+            //    IpAddress = GetIPAddress()
+
+            //});
+            if (isSuccess)
+            {
+                var primaryApplicant = await _repo.GetSingleGlobal<BlsApplicantMasterViewModel, BlsApplicantMaster>(x => x.UserId == user.Id && x.IsPrimaryApplicant == true);
+                if (primaryApplicant == null)
+                {
+                    var customer = await _blsBusiness.GetBLSCustomerByUserId(user.Id);
+                    await _repo.Create<BlsApplicantMasterViewModel, BlsApplicantMaster>(new BlsApplicantMasterViewModel
+                    {
+                        UserId = user.Id,
+                        IsPrimaryApplicant = true,
+                        FirstName = customer?.FirstName,
+                        SurName = customer?.Surname,
+                        LastName = customer?.LastName,
+                        DateOfBirth = customer?.DateOfBirth,
+                        PassportNo = customer?.PassportNumber,
+                        PassportType = customer?.PassportType,
+                        IssueDate = customer?.PassportIssueDate,
+                        ExpiryDate = customer?.PassportExpiryDate,
+                        IssuePlace = customer?.IssuePlace,
+                        IssueCountryId = customer?.BirthCountry,
+                        NationalityId = customer?.CountryOfResidence,
+                        Mobile = user.Mobile,
+                        Email = user.Email,
+                        CompanyId = BlsAppointmentConstant.CountryId
+                    });
+                }
+            }
+            return Json(data);
+        }
+
+        [HttpPost]
+
+        public async Task<IActionResult> ChangeLanguage(string hdnLang = null)
+        {
+            var langName = "English";
+            await SetLanguage(hdnLang, langName);
+            return Json(new { success = true });
+        }
+
+        private async Task<string> SetLanguage(string lang, string langName)
+        {
+            var lng = BlsAppointmentConstant.Languages[lang];
+            if (lng.IsNotNullAndNotEmpty())
+            {
+                langName = lng;
+            }
+            //switch (lang)
+            //{
+            //    case "fr-FR":
+            //        langName = "Français";
+            //        break;
+            //    case "es-ES":
+            //        langName = "Español";
+            //        break;
+            //    default:
+            //        langName = "English";
+            //        break;
+            //}
+            var response = new ApplicationIdentityUser
+            {
+                success = true,
+                Id = _userContext.Id,
+                UserId = _userContext.UserId,
+                UserName = _userContext.Name,
+                IsSystemAdmin = _userContext.IsSystemAdmin,
+                Email = _userContext.Email,
+                CompanyId = _userContext.CompanyId,
+                CompanyCode = _userContext.CompanyCode,
+                PhotoId = _userContext.PhotoId,
+                UserRoleCodes = _userContext.UserRoleCodes,
+                CultureName = langName,
+                CultureCode = lang,
+                MobileNumber = _userContext.MobileNumber,
+                UserUniqueId = _userContext.Email,
+                CompanyName = _userContext.CompanyName,
+                JobTitle = _userContext.JobTitle,
+                UserRoleIds = _userContext.UserRoleIds,
+                LegalEntityId = _userContext.LegalEntityId,
+                LegalEntityCode = _userContext.LegalEntityCode,
+                IsPasswordChanged = _userContext.IsPasswordChanged,
+                UserType = _userContext.UserType,
+                LoginTime = _userContext.LoginTime,
+                DataProtectionAccepted = _userContext.DataProtectionAccepted,
+                IpAddress = _userContext.IpAddress
+            };
+            response.MapClaims();
+            var identity = new ClaimsIdentity(response.Claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties()
+            {
+                IsPersistent = false,
+
+            });
+            return langName;
+        }
+
+        [HttpPost]
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> LogOut(string returnUrl = null)
+        {
+            var lang = _userContext.CultureCode;
+            var langName = _userContext.CultureName;
+            returnUrl = returnUrl ?? Url.Content("~/");
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            var response = new ApplicationIdentityUser
+            {
+                CultureName = langName,
+                CultureCode = lang
+            };
+            response.MapClaims();
+            var identity = new ClaimsIdentity(response.Claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties()
+            {
+                IsPersistent = false,
+
+            });
+
+            return Json(new { success = true, ru = returnUrl });
+        }
+        [Microsoft.AspNetCore.Authorization.Authorize(Policy = nameof(AuthorizeBlsUser))]
+        public IActionResult ChangePassword(string userId, bool alert)
+        {
+            var uid = _userContext.Id;
+            if (uid.IsNullOrEmpty() && userId.IsNotNullAndNotEmpty())
+            {
+                uid = userId;
+            }
+            //return View(new ChangePasswordViewModel() { UserId = "06a39faf-decc-4d65-ba00-73698f424fb4" });
+            return View(new ChangePasswordViewModel() { UserId = _userContext.Id, ChangePasswordAlert = alert });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ChangeUserPassword(ChangePasswordViewModel model)
+        {
+            //var postUrl = $"bls/query/ChangePassword";
+            try
+            {
+                model.UserId = _userContext.Id;
+                //model.CompanyId = BlsAppointmentConstant.CountryId;
+                var res = await _blsBusiness.ChangeUserPassword(model);
+                if (res.IsSuccess)
+                {
+                    model.ReturnUrl = model.ReturnUrl ?? Url.Content("~/");
+                    return Json(new { success = true, returnUrl = model.ReturnUrl });
+                }
+                else
+                {
+                    return Json(new { success = false, error = res.Message });
+                }
+
+            }
+            catch (Exception e)
+            {
+                // return Json(new { success = false, error = "Error in Authentication. Please contact Administrator" });
+                var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.ErrorinAuthenticationPleasecontactAdministrator;
+                return Json(new { success = false, error = err });
+            }
+        }
+
+        public async Task<IActionResult> ForgotPassword()
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            var model = new ForgotViewModel { Mode = "forgot" };
+            model.CaptchaId = await GetCaptcha();
+            ViewBag.CaptchaVerified = false;
+            ViewBag.CaptchaParam = string.Concat("data=", System.Web.HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(model.CaptchaId)));
+            return View(model);
+        }
+
+        [HttpPost]
+        //[ValidateAntiForgeryToken]
+        public async Task<ActionResult> ForgotPassword(ForgotViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                if (model != null)
+                {
+                    try
+                    {
+                        var captcha = await _repo.GetSingleById<CaptchaViewModel, Captcha>(model.CaptchaId);
+                        if (model.CaptchaId.IsNullOrEmpty() || (!await VerifyCaptcha(model.CaptchaId) && (captcha.IsNotNull() && captcha.IsVerified == false)))
+                        {
+                            ViewBag.CaptchaVerified = false;
+                            var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.InvalidCaptcha;
+                            return Json(new { success = false, error = err });
+                        }
+                        else
+                        {
+                            ViewBag.CaptchaVerified = true;
+                        }
+                        model.IpAddress = GetIPAddress();
+                        model.CompanyId = BlsAppointmentConstant.CountryId;
+                        var response = await _blsBusiness.ForgotPassword(model);
+                        if (response.IsSuccess)
+                        {
+                            model.UserId = response.Item.UserId;
+                            model.Mode = "success";
+                            var app = new ApplicationIdentityUser
+                            {
+                                PhotoId = model.UserId
+                            };
+                            app.MapClaims();
+                            var identity = new ClaimsIdentity(app.Claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                            var principal = new ClaimsPrincipal(identity);
+                            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties()
+                            {
+                                IsPersistent = false,
+
+                            });
+                            return View("ForgotPassword", new ForgotViewModel() { Email = model.Email, CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(response.Item.UserId), Mode = "success" });
+                        }
+                        else
+                        {
+                            ModelState.AddModelError("", response.Message);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.ErrorinAuthenticationPleasecontactAdministrator;
+                        ModelState.AddModelError("", err);
+
+                    }
+                }
+                else
+                {
+                    ModelState.AddModelError("", "The given email is invalid. Please enter a valid email or contact Administrator");
+                }
+
+                return View(new ForgotViewModel() { Email = model.Email, CaptchaId = model.CaptchaId });
+
+            }
+            return View(new ForgotViewModel() { Email = model.Email, CaptchaId = model.CaptchaId });
+        }
+
+
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ForgotPasswordOTPold(ForgotViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                if (model != null)
+                {
+                    //var postUrl = $"bls/query/ForgotPasswordOTP";
+                    try
+                    {
+                        var userBusiness = _serviceProvider.GetService<IUserBusiness>();
+                        var user = await userBusiness.GetSingleGlobal(x => x.Email == model.Email);
+                        //var response = await _blsAppointmentBusiness.ForgotPasswordOTP(model);
+                        if (user.IsNotNull())
+                        {
+                            try
+                            {
+                                if (user.ForgotPasswordOTP == model.ForgotPasswordOTP)
+                                {
+                                    model.Mode = "successotp";
+                                    return View("ForgotPassword", model);
+                                }
+                                else
+                                {
+                                    ModelState.AddModelError("", "Please enter correct OTP");
+                                    return View("ForgotPassword", model);
+                                    //  return Json(new { success = false, error = "Please enter correct OTP" });
+
+                                }
+                            }
+                            catch (Exception)
+                            {
+                                throw;
+
+                            }
+                        }
+                        else
+                        {
+                            ModelState.AddModelError("", "The given user email is wrong please contact the Admin");
+                            return View("ForgotPassword", model);
+                            //return Json(new { success = false, error = "The given user email is wrong please contact the Admin" });
+                        }
+
+
+                    }
+                    catch (Exception e)
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.ErrorinAuthenticationPleasecontactAdministrator;
+                        ModelState.AddModelError("", err);
+                        //  ModelState.AddModelError("", "Error in Authentication. Please contact Administrator");
+
+                    }
+                }
+                else
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.SomethingwentwrongpleasecontacttheAdmin;
+                    ModelState.AddModelError("", err);
+                    // ModelState.AddModelError("", "Something went wrong, please contact the Admin");
+                }
+            }
+            return View("ForgotPassword", model);
+        }
+        [HttpPost]
+        //[ValidateAntiForgeryToken]
+        public async Task<ActionResult> ForgotPasswordOTP(ForgotViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                model.CompanyId = BlsAppointmentConstant.CountryId;
+                model.UserId = _userContext.PhotoId;
+                //var userId = BlsAreaHelper.Decrypt(model.UserId);
+                //model.UserId = userId;
+                model.MaxOTPVerifyCount = BlsAppointmentConstant.MaxOTPRetryCount;
+                var res = await _blsBusiness.ForgotPasswordOTP(model);
+                if (res.IsSuccess)
+                {
+                    res.Item.UserId = model.UserId;
+                    model.Mode = "successotp";
+                    return View("ForgotPassword", new ForgotViewModel() { Email = res.Item.Email, CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(model.UserId), Mode = "successotp" });
+                }
+                else
+                {
+                    ModelState.AddModelError("", res.Message.ToString());
+                    return View("ForgotPassword", new ForgotViewModel() { Email = res.Item.Email, CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(model.UserId), Mode = model.Mode });
+                }
+            }
+            return View("ForgotPassword", new ForgotViewModel() { CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(model.UserId), Mode = model.Mode });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ForgotPasswordChange(ForgotViewModel model)
+        {
+            var userBusiness = _serviceProvider.GetService<IUserBusiness>();
+            model.Mode = "successotp";
+            if (ModelState.IsValid)
+            {
+                model.CompanyId = BlsAppointmentConstant.CountryId;
+                model.UserId = _userContext.PhotoId;
+                //var userId = BlsAreaHelper.Decrypt(model.UserId);
+                //model.UserId = userId;
+                var res = await _blsBusiness.ForgotPasswordChange(model);
+                if (res.IsSuccess)
+                {
+                    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+                    model.Mode = "successchange";
+                    return View("ForgotPassword", new ForgotViewModel() { Email = res.Item.Email, CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(model.UserId), Mode = "successchange", LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login" });
+                }
+                else
+                {
+                    ModelState.AddModelError("", res.Message);
+                    return View("ForgotPassword", new ForgotViewModel() { Email = res.Item.Email, CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(model.UserId), Mode = model.Mode });
+                }
+
+            }
+            return View("ForgotPassword", new ForgotViewModel() { CaptchaId = model.CaptchaId, UserId = BlsAreaHelper.Encrypt(model.UserId), Mode = model.Mode });
+        }
+
+
+
+        //public async Task<IActionResult> MyProfile(string id)
+        //{
+        //    // id = "06a39faf-decc-4d65-ba00-73698f424fb4";
+        //    var url = "bls/query/GetUserDetails?email=" + id;
+        //    var data = await BlsAreaHelper.GetApiAsync<UserViewModel>(url, _config);
+        //    return View(data);
+        //}
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateMyProfile(BlsUserViewModel model)
+        {
+            var postUrl = $"bls/query/UpdateUserProfile";
+            model.UserName = model.FirstName;
+            model.Name = model.FirstName;
+            model.Id = model.UserId;
+            model.DateOfBirth = model.ServerDateOfBirth;
+            model.PassportExpiryDate = model.ServerPassportExpiryDate;
+            model.PassportIssueDate = model.ServerPassportIssueDate;
+            try
+            {
+                var response = await BlsAreaHelper.PostApiAsync<BlsUserViewModel, ApplicationIdentityUser>(postUrl, model, _config);
+                response.UserId = model.UserId;
+                if (response.success)
+                {
+
+                    return Json(new { success = true, returnUrl = model.ReturnUrl });
+                }
+                else
+                {
+                    return Json(new { success = false, error = response.error });
+                }
+            }
+            catch (Exception e)
+            {
+                var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.ErrorInAuthentication;
+                return Json(new { success = false, error = err });
+
+            }
+        }
+
+        public async Task<IActionResult> RegisterUser()
+        {
+            var _business = _serviceProvider.GetService<IBlsGlobalAppointmentBusiness>();
+            var model = new BlsUserViewModel();
+            model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+            model.Mode = "register";
+            model.CaptchaId = await GetCaptcha();
+            ViewBag.CaptchaParam = string.Concat("data=", System.Web.HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(model.CaptchaId)));
+            var random = new Random();
+            var emailverificationCode = Convert.ToString(random.Next(100000, 1000000));
+            var mobileVerificationCode = Convert.ToString(random.Next(100000, 1000000));
+            var newGuid = Guid.NewGuid();
+            var code = String.Concat(emailverificationCode, "|", mobileVerificationCode, "|", newGuid);
+            var securityCode = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(code));
+            model.SecurityCode = securityCode;
+            //var blsSettingsData = await _blsAppointmentBusiness.GetGeneralSettingsList();
+            model.MobileVerificationEnabled = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableMobileOtpVerification, BlsAppointmentConstant.CountryId);
+            //model.LivnessMadatory = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.IsLivenessMandatory, BlsAppointmentConstant.CountryId);
+            ViewBag.EnableLivenessDetection = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableLivenessDetection, BlsAppointmentConstant.CountryId);
+            var countryList = await _business.GetCountryList();
+            ViewBag.countryList = Newtonsoft.Json.JsonConvert.SerializeObject(countryList);
+            return View(model);
+        }
+
+        public async Task<IActionResult> SendRegisterUserVerificationCode(string email, string mobile, bool isMobileVerify, string data, string captchaData, string captchaId)
+        {
+            try
+            {
+                var validateCaptcha = ValidateCaptcha(captchaData, captchaId);
+                var EnableMobileNoLengthValidation = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableMobileNoLengthValidation, BlsAppointmentConstant.CountryId);
+                var TotalMobileNumberLength = await _blsQueryBusiness.GetApplicationSettings<int>(ApplicationSettingsTypeEnum.TotalMobileNumberLength, BlsAppointmentConstant.CountryId);
+                if (!validateCaptcha.Item1)
+                {
+                    return validateCaptcha.Item2;
+                }
+                var ip = GetIPAddress();
+                var _userBusiness = _serviceProvider.GetService<IUserBusiness>();
+                var _emailBusiness = _serviceProvider.GetService<IEmailBusiness>();
+                if (email.IsNullOrEmpty())
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterEmail;
+                    return Json(new { success = false, err = err });
+                }
+                if (mobile.IsNullOrEmpty() && isMobileVerify)
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterMobile;
+                    return Json(new { success = false, err = err });
+                }
+                if (mobile.IsNotNullAndNotEmpty() && EnableMobileNoLengthValidation && mobile.Length != TotalMobileNumberLength)
+                {
+
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MobileLengthValidation;
+                    var text = String.Format(err, " User ", TotalMobileNumberLength);
+                    return Json(new { success = false, err = text });
+                }
+                var efp = await _repo.GetListGlobal<EmailViewModel, Email>(x => x.CompanyId == BlsAppointmentConstant.CountryId && (x.To == email || x.IpAddress == ip)
+                  && x.EmailContentType == EmailContentTypeEnum.EmailVerification && x.CreatedDate > DateTime.Now.AddMinutes(-5));
+                if (efp != null && efp.Count > 2)
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MaxNumberOfOtp;
+                    return Json(new { success = false, err = err });
+                }
+                var isValid = await _blsBusiness.ValidateCutomerRegistration(new UserViewModel { Email = email, Mobile = mobile, Id = Guid.NewGuid().ToString(), CompanyId = BlsAppointmentConstant.CountryId });
+                if (!isValid.Item1)
+                {
+                    return Json(new { success = false, err = isValid.Item2 });
+                }
+                //var securitycode = BlsAreaHelper.Decrypt(data);
+                //var code = securitycode.Split("|");
+                //var emailverificationCode = code[0];
+                //var mobileVerificationCode = code[1];
+                var random = new Random();
+                var emailverificationCode = Convert.ToString(random.Next(100000, 1000000));
+                var mobileVerificationCode = Convert.ToString(random.Next(100000, 1000000));
+                var newGuidCode = Guid.NewGuid();
+                var code = String.Concat(emailverificationCode, "|", mobileVerificationCode, "|", newGuidCode);
+                var securityCode = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(code));
+                // model.SecurityCode = securityCode;
+                var notificationTemplateModel = await _repo.GetSingleGlobal<NotificationTemplateViewModel, NotificationTemplate>(x => x.Code == "BLS_APPOINTMENT_USER_VERIFICATION");
+                EmailViewModel emailModel = new EmailViewModel();
+                var newGuid = Guid.NewGuid();
+                var encryptEmail = String.Concat(email, "|", newGuid);
+                var encryptMobile = String.Concat(mobile, "|", newGuid);
+                encryptEmail = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(encryptEmail));
+                encryptMobile = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(encryptMobile));
+                if (notificationTemplateModel.IsNotNull())
+                {
+                    var body = notificationTemplateModel.Body;
+                    if (body.Contains("{{user-name}}"))
+                    {
+                        body = body.Replace("{{user-name}}", email);
+                    }
+                    if (body.Contains("{{verification-code}}"))
+                    {
+                        body = body.Replace("{{verification-code}}", emailverificationCode);
+                    }
+                    emailModel.To = email;
+                    emailModel.Subject = notificationTemplateModel.Subject;
+                    emailModel.Body = body;
+                    emailModel.EmailContentType = EmailContentTypeEnum.EmailVerification;
+                    emailModel.IpAddress = ip;
+                    emailModel.CompanyId = BlsAppointmentConstant.CountryId;
+                    var resultemail = await _emailBusiness.SendMail(emailModel);
+                    if (isMobileVerify)
+                    {
+                        var mfp = await _repo.GetListGlobal<SmsViewModel, Sms>(x => (x.Number == mobile || x.IpAddress == ip)
+                       && x.SmsContentType == SmsContentTypeEnum.MobileVerification && x.CreatedDate > DateTime.Now.AddMinutes(-5));
+                        if (mfp != null && mfp.Count > 2)
+                        {
+                            var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MaxNumberOfOtp;
+                            return Json(new { success = false, err = err });
+                        }
+                        var sms = notificationTemplateModel.SmsText;
+                        if (sms.Contains("{{user-name}}"))
+                        {
+                            sms = sms.Replace("{{user-name}}", email);
+                        }
+                        if (sms.Contains("{{verification-code}}"))
+                        {
+                            sms = sms.Replace("{{verification-code}}", mobileVerificationCode);
+                        }
+                        var resultsms = await _emailBusiness.ManageSms(new NotificationViewModel
+                        {
+                            Recipient = new UserViewModel { Mobile = $"{BlsAppointmentConstant.IsdCodeOnly}{mobile}" },
+                            SmsText = sms,
+                            NotifyBySms = true,
+                            DataAction = DataActionEnum.Create,
+                            ReferenceType = ReferenceTypeEnum.BlsApplication,
+                            CompanyId = BlsAppointmentConstant.CountryId,
+                            IpAddress = ip,
+                            SmsContentType = SmsContentTypeEnum.MobileVerification
+
+                        });
+                        if (resultemail.IsSuccess && resultsms.IsSuccess)
+                        {
+
+                            return Json(new { success = true, err = "Email Sent", encryptEmail = encryptEmail, encryptMobile = encryptMobile, securityCode = securityCode });
+                        }
+                    }
+
+                    if (resultemail.IsSuccess)
+                    {
+
+                        return Json(new { success = true, err = "Email Sent", encryptEmail = encryptEmail, encryptMobile = encryptMobile, securityCode = securityCode });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, err = ex.Message.ToHtmlError() });
+            }
+            return Json(new { success = false, err = "Error" });
+        }
+        public async Task<bool> VerifyCaptchaOnRegistration(string captchaId)
+        {
+            var repo = _serviceProvider.GetService<IRepositoryBase<CaptchaViewModel, Captcha>>();
+            var captcha = await repo.GetSingleById(captchaId);
+            return captcha != null && captcha.IsVerified && !captcha.IsExpired;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RegisterUser(BlsUserViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                if (model != null)
+                {
+                    var valData = DateTime.Today.AddDays(180);
+                    model.CompanyId = BlsAppointmentConstant.CountryId;
+                    var passValidityDays = await _blsQueryBusiness.GetApplicationSettings<int>(ApplicationSettingsTypeEnum.PassportValidityDays, model.CompanyId);
+                    if (passValidityDays != 0)
+                    {
+                        valData = DateTime.Today.AddDays(passValidityDays);
+                    }
+                    else
+                    {
+                        passValidityDays = 180;
+                    }
+                    var validateCaptcha = ValidateCaptcha(model.CaptchaData, model.CaptchaId);
+                    if (!validateCaptcha.Item1)
+                    {
+                        return validateCaptcha.Item2;
+                    }
+                    var valid = await ValidateRegistrationFields(model);
+                    if (valid.Count > 0)
+                    {
+                        return Json(new { success = false, error = valid.ToHtmlError() });
+                    }
+                    var encryptedMobile = Helper.Decrypt(HttpUtility.UrlDecode(model.EncryptedMobile));
+                    var mobile = encryptedMobile.Split("|");
+                    var encryptedEmail = Helper.Decrypt(HttpUtility.UrlDecode(model.EncryptedEmail));
+                    var email = encryptedEmail.Split("|");
+                    var code = Helper.Decrypt(HttpUtility.UrlDecode(model.SecurityCode));
+                    var securityCode = code.Split("|");
+                    if (securityCode[0] != model.EmailOtp)
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterCorrectEmailOTP;
+                        return Json(new { success = false, error = err });
+                    }
+                    if (securityCode[1] != model.MobileOtp && model.MobileVerificationEnabled)
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterCorrectMobileOTP;
+                        return Json(new { success = false, error = err });
+                    }
+                    if (email[0] != model.Email)
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.VerifiedEmailSubmittedEmail;
+                        return Json(new { success = false, error = err });
+                    }
+                    if (model.MobileVerificationEnabled && (mobile[0] != model.Mobile))
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.VerifiedMobileSubmittedMobile;
+                        return Json(new { success = false, error = err });
+                    }
+
+                    model.DateOfBirth = model.ServerDateOfBirth;
+                    model.PassportExpiryDate = model.ServerPassportExpiryDate;
+                    model.PassportIssueDate = model.ServerPassportIssueDate;
+                    if (model.DateOfBirth > DateTime.Today)
+                    {
+                        return Json(new { success = false, error = "Date of birth should not be future date" });
+                    }
+                    if (model.PassportIssueDate > DateTime.Today)
+                    {
+                        return Json(new { success = false, error = "Passport issue date should not be future date" });
+                    }
+                    if (model.PassportExpiryDate < DateTime.Today)
+                    {
+                        return Json(new { success = false, error = "Passport expiry date should not be past date" });
+                    }
+                    if (model.PassportExpiryDate < valData)
+                    {
+                        var text = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Passportof_0_shouldhaveatleast_1_daysvalidity;
+                        var err = String.Format(text, "User", passValidityDays);
+                        return Json(new { success = false, error = err });
+                    }
+                    var r = new Random();
+                    model.Password = Convert.ToString(r.Next(100000, 999999));
+                    model.IpAddress = GetIPAddress();
+                    model.ConfirmPassword = model.Password;
+                    try
+                    {
+                        // var response = await BlsAreaHelper.PostApiAsync<UserViewModel, ApplicationIdentityUser>(postUrl, model, _config);
+                        model.IsEmailVerified = true;
+                        model.IsMobileVerified = model.MobileVerificationEnabled ? true : false;
+                        model.BiometricConsentAccepted = true;
+                        model.BiometricConsentAcceptedDate = DateTime.Now;
+                        var EnableLivenessDetection = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableLivenessDetection, BlsAppointmentConstant.CountryId);
+                        if (EnableLivenessDetection)
+                        {
+                            model.DataProtectionConsentAccepted = true;
+                            model.DataProtectionConsentAcceptedDate = DateTime.Now;
+                        }
+                        model.CompanyId = BlsAppointmentConstant.CountryId;
+                        var response = await _blsAppointmentBusiness.RegisterUser(model);
+                        if (response.IsSuccess)
+                        {
+                            model.Mode = "registered";
+                            model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+                            await UpdateCaptcha(model.CaptchaId);
+                            return Json(new { success = true });
+                        }
+                        else
+                        {
+                            return Json(new { success = false, error = response.ErrorText });
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        return Json(new { success = false, error = e.ToString() });
+
+                    }
+                }
+            }
+            return Json(new { success = false, error = ModelState.SerializeErrors().ToHtmlError() });
+        }
+
+        public async Task<Dictionary<string, string>> ValidateRegistrationFields(UserViewModel model)
+        {
+            var errorList = new Dictionary<string, string>();
+            var err = "";
+            if (model.FirstName.IsNullOrEmptyOrWhiteSpace())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterFirstName;
+                errorList.Add("FirstName", err);
+                // errorList.Add("FirstName", "Please Enter First Name.");
+            }
+            else if (!Regex.IsMatch(model.FirstName.ToString(), @"^[a-zA-Z0-9 ]*$"))
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.SpecialCharactersarenotallowedinFirstName;
+                errorList.Add("FirstNameValidation", err);
+                //errorList.Add("FirstNameValidation", "Special Characters are not allowed in First Name");
+            }
+            //if (model.LastName.IsNullOrEmptyOrWhiteSpace())
+            //{
+            //    err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterLastName;
+            //    errorList.Add("LastName", err);
+            //    //errorList.Add("LastName", "Please Enter Last Name.");
+            //}
+            //else if (!Regex.IsMatch(model.LastName.ToString(), @"^[a-zA-Z0-9 ]*$"))
+            //{
+            //    err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.SpecialCharactersarenotallowedinLastName;
+            //    errorList.Add("LastNameValidation", err);
+            //}
+            if (model.SurName.IsNotNullAndNotEmpty() && !Regex.IsMatch(model.SurName.ToString(), @"^[a-zA-Z0-9 ]*$"))
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.SpecialCharactersarenotallowedinSurname;
+                errorList.Add("SurNameValidation", err);
+                //errorList.Add("SurNameValidation", "Special Characters are not allowed in Surname");
+            }
+            if (model.Email.IsNullOrEmptyOrWhiteSpace())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterEmail;
+                errorList.Add("Email", err);
+                // errorList.Add("Email", "Please Enter Email");
+            }
+            else if (!Regex.IsMatch(model.Email, @"\A(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\Z", RegexOptions.IgnoreCase))
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.EmailAddressisInvalid;
+                errorList.Add("EmailValidation", err);
+                // errorList.Add("EmailValidation", "Email Address is Invalid");
+            }
+            if (model.BirthCountry.IsNullOrEmptyOrWhiteSpace())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseChoosePassportIssueCountry;
+                errorList.Add("PassportIssue", err);
+                //errorList.Add("PassportIssue", "Please Choose Passport Issue Country");
+            }
+            if (model.PassportType.IsNullOrEmptyOrWhiteSpace())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseChoosePassportType;
+                errorList.Add("PassportType", err);
+                //  errorList.Add("PassportType", "Please Choose Passport Type");
+            }
+            if (model.IssuePlace.IsNullOrEmptyOrWhiteSpace())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterPassportIssuePlace;
+                errorList.Add("IssuePlace", err);
+                // errorList.Add("IssuePlace", "Please Enter Passport Issue Place");
+            }
+            //if (model.CountryOfResidence.IsNullOrEmptyOrWhiteSpace())
+            //{
+            //    err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseChooseCountryOfResidence;
+            //    errorList.Add("CountryOfResidence", err);
+            //    // errorList.Add("CountryOfResidence", "Please Choose Country Of Residence");
+            //}
+            if (model.Mobile.IsNullOrEmptyOrWhiteSpace())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterMobileNumber;
+                errorList.Add("MobileNumber", err);
+                //errorList.Add("MobileNumber", "Please Enter Mobile Number");
+            }
+            else if (model.Mobile.StartsWith('0'))
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MobileNumberShouldNotStartWithZero;
+                errorList.Add("MobileNumberNotZero", err);
+                //errorList.Add("MobileNumberNotZero", "Mobile Number Should Not Start With Zero");
+            }
+            return errorList;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> VerifyRegistrationOTP(BlsUserViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                if (model != null)
+                {
+
+                    if (model.VerificationOTP == model.OTP)
+                    {
+                        //var postUrl = $"bls/query/RegisterUser";
+                        var random = new Random();
+                        string password = Convert.ToString(random.Next(10000000, 99999999));
+                        model.Password = password;
+                        model.ConfirmPassword = password;
+                        var response = _blsAppointmentBusiness.RegisterUser(model);
+                        if (response != null)
+                        {
+                            model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+                            model.Mode = "registered";
+                            return View("RegisterUser", model);
+                        }
+                        ModelState.AddModelError("", "Error");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError("", "Please enter correct OTP, sent to your email address");
+                    }
+
+                }
+                else
+                {
+                    ModelState.AddModelError("", "Something went wrong, please contact the Admin");
+                }
+            }
+            return View("RegisterUser", model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> CreateUser(BlsUserViewModel model)
+        {
+            model.Mode = "successotp";
+            if (ModelState.IsValid)
+            {
+                if (model != null)
+                {
+                    if (model.Password != model.ConfirmPassword)
+                    {
+                        ModelState.AddModelError("", "Confirm password is not same as new password.");
+                    }
+                    else
+                    {
+                        //var postUrl = $"bls/query/RegisterUser";
+                        try
+                        {
+                            var response = await _blsAppointmentBusiness.RegisterUser(model);
+                            if (response != null)
+                            {
+                                model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+                                model.Mode = "registered";
+                                return View("RegisterUser", model);
+                            }
+                            else
+                            {
+                                ModelState.AddModelError("", "Error");
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            ModelState.AddModelError("", "Error in Authentication. Please contact Administrator");
+
+                        }
+                    }
+                }
+                else
+                {
+                    ModelState.AddModelError("", "The given details is wrong. Please contact the Admin");
+                }
+            }
+            return View("RegisterUser", model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Microsoft.AspNetCore.Authorization.Authorize(Policy = nameof(AuthorizeBlsUser))]
+        public async Task<ActionResult> DeleteBLSCustomer(BlsUserViewModel model)
+        {
+            try
+            {
+                var err = "";
+                if (model.CaptchaId.IsNullOrEmpty() || !await VerifyCaptcha(model.CaptchaId))
+                {
+                    err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.UserisnotverifiedPleaseverifytheuser;
+                    return Json(new { success = false, msg = err });
+                }
+                var activeAppointments = await _repo.GetList<BlsAppointmentViewModel, BlsAppointment>(x => (x.Email == model.Email || x.Mobile == model.Mobile) && x.AppointmentStatusCode == "BLS_APPOINTMENT_CONFIRMED" && x.AppointmentDate >= DateTime.Today);
+                if (activeAppointments.Count > 0)
+                {
+                    err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.CannotDeleteActiveAppointment;
+                    return Json(new { success = false, msg = err });
+                    //  return Json(new { success = false, msg = "Cannot Delete Account, As there are Active Appointment for the Account." });
+                }
+                if (model.DeletedCount > 2)
+                {
+                    err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.CannotDeleteAlreadyDeleted3Times;
+                    return Json(new { success = false, msg = err });
+                    //return Json(new { success = false, msg = "Cannot Delete Account, As you have Already Deleted Account 3 Times." });
+                }
+                model.UserId = _userContext.Id;
+
+                var res = await _blsQueryBusiness.DeleteBLSCustomer(model.UserId);
+                // var url = $"bls/query/DeleteBLSCustomer?id=" + model.UserId;
+                // var res = await BlsAreaHelper.PostApiAsync<string, bool>(url, model.UserId, _config);
+                if (res)
+                {
+                    await _userBusiness.Delete(model.UserId);
+                    var applicantMasters = await _blsBusiness.GetList<BlsApplicantMasterViewModel, BlsApplicantMaster>(x => x.UserId == model.UserId);
+                    foreach (var item in applicantMasters)
+                    {
+                        await _blsAppointmentBusiness.Delete<BlsApplicantMasterViewModel, BlsApplicantMaster>(item.Id);
+                    }
+                    await UpdateCaptcha(model.CaptchaId);
+                    return Json(new { success = true, msg = "Success" });
+                }
+                else
+                {
+                    return Json(new { success = false, msg = "Error" });
+                }
+
+            }
+            catch
+            {
+                return Json(new { success = false, msg = "Error" });
+            }
+
+        }
+        [Microsoft.AspNetCore.Authorization.Authorize(Policy = nameof(AuthorizeBlsUser))]
+        public async Task<IActionResult> DeleteUser()
+        {
+            //var auth = AuthorizeBls($"/{BlsAppointmentConstant.AreaName}/account/deleteuser", $"~/{BlsAppointmentConstant.AreaName}/account/login");
+            //if (!auth.Item1)
+            //{
+            //    return auth.Item2;
+            //}
+            var id = _userContext.UserId;
+            var email = _userContext.Email;
+            //var url = "bls/query/GetUserDetails?email=" + id;
+            //var data = await BlsAreaHelper.GetApiAsync<BlsUserViewModel>(url, _config);
+            var _userBusiness = _serviceProvider.GetService<IUserBusiness>();
+            var _blsQueryBusiness = _serviceProvider.GetService<IBLSQueryBusiness>();
+           // var data = await _userBusiness.GetUserById(id, email);
+            var data = await _repo.GetSingleGlobal<UserViewModel, User>(x => x.Id == id && x.Email == email);
+
+            var blsCustomerData = await _blsBusiness.GetBLSCustomerByUserId(data.Id);
+            var deleteCount = await _blsQueryBusiness.GetDeletedBLSCustomerById(blsCustomerData.Email, blsCustomerData.MobileNumber, BlsAppointmentConstant.CountryId);
+            var model = new BlsUserViewModel();
+            if (blsCustomerData.IsNotNull())
+            {
+                model.SurName = blsCustomerData.Surname;
+                model.FirstName = blsCustomerData.FirstName;
+                model.LastName = blsCustomerData.LastName;
+                model.BirthCountry = blsCustomerData.BirthCountry;
+                model.PassportNumber = blsCustomerData.PassportNumber;
+                model.DateOfBirth = blsCustomerData.DateOfBirth;
+                model.CountryOfResidence = blsCustomerData.CountryOfResidence;
+                model.IssuePlace = blsCustomerData.IssuePlace;
+                model.PassportType = blsCustomerData.PassportType;
+                model.PassportExpiryDate = blsCustomerData.PassportExpiryDate;
+                model.PassportIssueDate = blsCustomerData.PassportIssueDate;
+                model.Mobile = blsCustomerData.MobileNumber;
+                model.CountryCode = blsCustomerData.CountryCode;
+                model.UserId = blsCustomerData.UserId;
+                model.Email = blsCustomerData.Email;
+                model.DeletedCount = deleteCount.Count;
+            }
+            model.CaptchaId = await GetCaptcha();
+            ViewBag.CaptchaParam = string.Concat("data=", System.Web.HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(model.CaptchaId)));
+            if (model == null)
+            {
+                return View(new BlsUserViewModel());
+            }
+
+            return View(model);
+        }
+
+        public async Task<IActionResult> UserVerification(string userId)
+        {
+            var user = await _repo.GetSingleGlobal<UserViewModel, User>(x => x.Id == userId);
+            if (user == null)
+            {
+                return RedirectToAction("login", "account", new { @area = BlsAppointmentConstant.AreaName });
+            }
+            if (user.IsMobileVerified && user.IsEmailVerified)
+            {
+                return RedirectToAction("VisaTypeVerification", "Bls", new { @area = BlsAppointmentConstant.AreaName });
+            }
+            user.MobileOtp = "";
+            user.EmailOtp = "";
+            //var blsSettingsData = await _blsAppointmentBusiness.GetGeneralSettingsList();
+
+            //if (blsSettingsData != null)
+            //{
+            //    user.MobileVerificationEnabled = Convert.ToBoolean(blsSettingsData.FirstOrDefault(x => x.Code == "ENABLE_MOBILE_VERIFICATION")?.Value);
+            //}
+            user.MobileVerificationEnabled = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableMobileOtpVerification, BlsAppointmentConstant.CountryId);
+
+            if (user.MobileVerificationEnabled == false && user.IsEmailVerified)
+            {
+                return RedirectToAction("VisaTypeVerification", "Bls", new { @area = BlsAppointmentConstant.AreaName });
+            }
+
+            return View(user);
+        }
+
+        public async Task<JsonResult> SendEmailMobileVerificationCode(string email, string mobile, string userId, bool isMobileVerifi)
+        {
+            try
+            {
+                var EnableMobileNoLengthValidation = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableMobileNoLengthValidation, BlsAppointmentConstant.CountryId);
+                var TotalMobileNumberLength = await _blsQueryBusiness.GetApplicationSettings<int>(ApplicationSettingsTypeEnum.TotalMobileNumberLength, BlsAppointmentConstant.CountryId);
+                if (email.IsNullOrEmpty())
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterEmail;
+                    return Json(new { success = false, err = err });
+                }
+                if (isMobileVerifi && mobile.IsNullOrEmpty())
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterMobile;
+                    return Json(new { success = false, err = err });
+                }
+                if (isMobileVerifi && EnableMobileNoLengthValidation && mobile.IsNotNullAndNotEmpty() && mobile.Length != TotalMobileNumberLength)
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MobileLengthValidation;
+                    var text = String.Format(err, " User ", TotalMobileNumberLength);
+                    return Json(new { success = false, err = text });
+                }
+                var _userBusiness = _serviceProvider.GetService<IUserBusiness>();
+                var userDetails = await _repo.GetSingleGlobal<UserViewModel, User>(x => x.Id == userId);
+                if (email != userDetails.Email)
+                {
+
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterCorrectEmail;
+                    return Json(new { success = false, err = err });
+                }
+                if (!userDetails.IsEmailVerified || (isMobileVerifi && !userDetails.IsMobileVerified))
+                {
+                    var isMobile = await _repo.GetSingleGlobal<UserViewModel, User>(x => x.Mobile == mobile && x.Id != userDetails.Id && x.IsMobileVerified);
+                    if (isMobileVerifi && isMobile.IsNotNull())
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MobileAlreadyVerified;
+                        return Json(new { success = false, err = err });
+                    }
+                    if (email.Contains("@gmail."))
+                    {
+                        var splitEmail = email.Split("@");
+                        var prefixEmail = splitEmail[0];
+                        prefixEmail = prefixEmail.Replace(".", "");
+                        var uniqueEmail = String.Concat(prefixEmail, "@", splitEmail[1]);
+                        var isUnique = await _repo.GetSingleGlobal<UserViewModel, User>(x => x.UniqueEmail == uniqueEmail && x.Id != userDetails.Id && x.IsEmailVerified);
+                        if (isUnique.IsNotNull())
+                        {
+                            var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.Emailalreadyexist;
+                            return Json(new { success = false, err = err });
+                        }
+                    }
+                    var _emailBusiness = _serviceProvider.GetService<IEmailBusiness>();
+                    var random = new Random();
+                    var emailverificationCode = Convert.ToString(random.Next(100000, 1000000));
+                    var mobileVerificationCode = Convert.ToString(random.Next(100000, 1000000));
+                    var notificationTemplateModel = await _repo.GetSingleGlobal<NotificationTemplateViewModel, NotificationTemplate>(x => x.Code == "BLS_APPOINTMENT_USER_VERIFICATION");
+                    EmailViewModel emailModel = new EmailViewModel();
+                    if (notificationTemplateModel.IsNotNull())
+                    {
+                        var body = notificationTemplateModel.Body;
+                        if (body.Contains("{{user-name}}"))
+                        {
+                            body = body.Replace("{{user-name}}", email);
+                        }
+                        if (body.Contains("{{verification-code}}"))
+                        {
+                            body = body.Replace("{{verification-code}}", emailverificationCode);
+                        }
+                        emailModel.To = email;
+                        emailModel.Subject = notificationTemplateModel.Subject;
+                        emailModel.Body = body;
+                        emailModel.CompanyId = BlsAppointmentConstant.CountryId;
+                        var resultemail = await _emailBusiness.SendMail(emailModel);
+                        if (isMobileVerifi)
+                        {
+                            if (userDetails.MobileOtpSendCount > 4)
+                            {
+                                var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MaxNumberOfSmsOtp;
+                                return Json(new { success = false, err = err });
+                            }
+                            var sms = notificationTemplateModel.SmsText;
+                            if (sms.Contains("{{user-name}}"))
+                            {
+                                sms = sms.Replace("{{user-name}}", email);
+                            }
+                            if (sms.Contains("{{verification-code}}"))
+                            {
+                                sms = sms.Replace("{{verification-code}}", mobileVerificationCode);
+                            }
+                            var ip = GetIPAddress();
+                            var resultsms = await _emailBusiness.ManageSms(new NotificationViewModel
+                            {
+                                Recipient = new UserViewModel { Mobile = $"{BlsAppointmentConstant.IsdCodeOnly}{mobile}" },
+                                SmsText = sms,
+                                NotifyBySms = true,
+                                DataAction = DataActionEnum.Create,
+                                ReferenceId = userDetails.Id,
+                                ReferenceType = ReferenceTypeEnum.BlsApplication,
+                                CompanyId = userDetails.CompanyId,
+                                IpAddress = ip
+
+                            });
+                            if (resultemail.IsSuccess && resultsms.IsSuccess)
+                            {
+                                userDetails.EmailOtp = emailverificationCode;
+                                userDetails.MobileOtp = mobileVerificationCode;
+                                userDetails.EmailOtpExpiry = DateTime.Now.AddMinutes(10);
+                                userDetails.MobileOtpExpiry = DateTime.Now.AddMinutes(10);
+                                userDetails.EmailOtpSendCount += 1;
+                                userDetails.MobileOtpSendCount += 1;
+                                //userDetails.Mobile = mobile;
+                                var res = await _userBusiness.Edit(userDetails);
+                                var Emobile = String.Concat(mobile, "|", Guid.NewGuid());
+                                var mobileEncrypt = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(Emobile));
+                                return Json(new { success = true, err = "Email Sent", mobileEncrypt = mobileEncrypt });
+                            }
+                        }
+                        if (resultemail.IsSuccess)
+                        {
+                            userDetails.EmailOtp = emailverificationCode;
+                            userDetails.EmailOtpExpiry = DateTime.Now.AddMinutes(10);
+                            userDetails.EmailOtpSendCount += 1;
+                            var res = await _userBusiness.Edit(userDetails);
+                            var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.EmailSent;
+                            return Json(new { success = true, err = err });
+                        }
+
+                        return Json(new { success = false, err = "Error" });
+                    }
+                    return Json(new { success = false, err = "Error" });
+                }
+                else
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.UserAlreadyVerified;
+                    return Json(new { success = false, err = err });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, err = ex.Message.ToHtmlError() });
+            }
+
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<JsonResult> SubmitUserVerification(UserViewModel model)
+        {
+            try
+            {
+                var _userBusiness = _serviceProvider.GetService<IUserBusiness>();
+                var userDetails = await _repo.GetSingleGlobal<UserViewModel, User>(x => x.Id == model.Id);
+
+                if (userDetails.Email != model.Email)
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.VerifiedEmailSubmittedEmail;
+                    return Json(new { success = false, err = err });
+                }
+                if (userDetails.EmailOtpExpiry < DateTime.Now)
+                {
+                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.OTPIsExpired;
+                    return Json(new { success = false, err = err });
+                }
+                if (!userDetails.IsEmailVerified || (model.MobileVerificationEnabled && !userDetails.IsMobileVerified))
+                {
+
+                    if (!(userDetails.EmailOtp == model.EmailOtp))
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterCorrectEmailOTP;
+                        return Json(new { success = false, err = err });
+                    }
+                    if (!(userDetails.MobileOtp == model.MobileOtp) && model.MobileVerificationEnabled)
+                    {
+                        var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterCorrectMobileOTP;
+                        return Json(new { success = false, err = err });
+                    }
+                    if (model.Email.Contains("@gmail."))
+                    {
+                        var splitEmail = model.Email.Split("@");
+                        var prefixEmail = splitEmail[0];
+                        prefixEmail = prefixEmail.Replace(".", "");
+                        var uniqueEmail = String.Concat(prefixEmail, "@", splitEmail[1]);
+                        userDetails.UniqueEmail = uniqueEmail;
+                    }
+                    if (model.MobileVerificationEnabled)
+                    {
+                        var Emobile = BlsAreaHelper.Decrypt(HttpUtility.UrlDecode(model.EncryptedMobile));
+                        var mobile = Emobile.Split("|");
+                        if ((mobile[0] != model.Mobile))
+                        {
+                            var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.VerifiedMobileSubmittedMobile;
+                            return Json(new { success = false, err = err });
+                        }
+                        userDetails.Mobile = mobile[0];
+                        userDetails.IsMobileVerified = true;
+                        await _blsBusiness.UpdateBLSCustomerMobileNumber(userDetails.Id, mobile[0]);
+                    }
+
+                    userDetails.IsEmailVerified = true;
+                    var res = await _userBusiness.Edit(userDetails);
+                    return Json(new { success = true, err = "Successfull" });
+
+                }
+
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, err = ex.Message.ToHtmlError() });
+            }
+            return Json(new { success = false, err = "Error" });
+
+        }
+
+        public async Task<IActionResult> RegisterAgent()
+        {
+            var model = new BlsAgentMasterViewModel();
+            model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+            model.CaptchaId = await GetCaptcha();
+            model.DataAction = DataActionEnum.Create;
+            ViewBag.CaptchaParam = string.Concat("data=", System.Web.HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(model.CaptchaId)));
+
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RegisterAgent(BlsAgentMasterViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                if (model != null)
+                {
+                    var validateCaptcha = ValidateCaptcha(model.CaptchaData, model.CaptchaId);
+                    if (!validateCaptcha.Item1)
+                    {
+                        return validateCaptcha.Item2;
+                    }
+                    var valid = await ValidateAgentRegistrationFields(model);
+                    if (valid.Count > 0)
+                    {
+                        return Json(new { success = false, error = valid.ToHtmlError() });
+                    }
+
+                    try
+                    {
+                        var response = await _blsAppointmentBusiness.RegisterAgent(model);
+                        if (response.IsSuccess)
+                        {
+                            model.LoginUrl = $"/{BlsAppointmentConstant.AreaName}/account/login";
+                            await UpdateCaptcha(model.CaptchaId);
+                            return Json(new { success = true });
+                        }
+                        else
+                        {
+                            return Json(new { success = false, error = response.ErrorText });
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        return Json(new { success = false, error = e.ToString() });
+
+                    }
+                }
+            }
+            return Json(new { success = false, error = ModelState.SerializeErrors().ToHtmlError() });
+        }
+
+        public async Task<Dictionary<string, string>> ValidateAgentRegistrationFields(BlsAgentMasterViewModel model)
+        {
+            var errorList = new Dictionary<string, string>();
+            var err = "";
+
+            if (model.CountryId.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseChooseCountry;
+                errorList.Add("Counry", err);
+            }
+            if (model.MissionId.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseChooseMission;
+                errorList.Add("Mission", err);
+            }
+            if (model.LocationId.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseChooseLocation;
+                errorList.Add("Location", err);
+            }
+            if (model.Name.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterName;
+                errorList.Add("Name", err);
+            }
+            if (model.EmailId.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterEmail;
+                errorList.Add("Email", err);
+            }
+            else if (!Regex.IsMatch(model.EmailId, @"\A(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\Z", RegexOptions.IgnoreCase))
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.EmailAddressisInvalid;
+                errorList.Add("EmailValidation", err);
+            }
+            if (model.Mobile.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterMobileNumber;
+                errorList.Add("MobileNumber", err);
+            }
+            else if (model.Mobile.StartsWith('0'))
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MobileNumberShouldNotStartWithZero;
+                errorList.Add("MobileNumberNotZero", err);
+            }
+            if (model.OfficeAddress.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterOfficeAddress;
+                errorList.Add("OfficeAddress", err);
+            }
+            if (model.IdCardNo.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterIdCardNo;
+                errorList.Add("IdCardNo", err);
+            }
+            if (model.TravelAgency.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterTravelAgency;
+                errorList.Add("TravelAgency", err);
+            }
+            if (model.TravelAgency.IsNullOrEmpty())
+            {
+                err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseSelectExpirydate;
+                errorList.Add("Expirydate", err);
+            }
+
+            return errorList;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetCountryId()
+        {
+            var list = await _blsQueryBusiness.GetMissionCountryList();
+            return Json(list);
+        }
+        [HttpGet]
+        public async Task<IActionResult> GetMission(string countryId)
+        {
+            var list = await _blsAppointmentBusiness.GetMissionListForAppointment(BlsAppointmentConstant.CountryId);
+            list = list.Where(x => x.CountryId == countryId).ToList();
+            return Json(list);
+        }
+        [HttpGet]
+        public async Task<IActionResult> GetLocation(string missionId)
+        {
+            var list = await _blsAppointmentBusiness.GetLocationListForAppointment(BlsAppointmentConstant.CountryId);
+            list = list.Where(x => x.MissionId == missionId).ToList();
+            return Json(list);
+        }
+
+        public async Task<IActionResult> ForgotUserId()
+        {
+            var model = new BlsUserViewModel();
+            model.CaptchaId = await GetCaptchaPublic();
+            ViewBag.CaptchaParam = string.Concat("data=", System.Web.HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(model.CaptchaId)));
+            return View(model);
+        }
+
+
+        [HttpPost]
+        public async Task<IActionResult> GetPassportNumber(BlsUserViewModel model)
+        {
+            var validateCaptcha = ValidateCaptcha(model.CaptchaData, model.CaptchaId);
+            if (!validateCaptcha.Item1)
+            {
+                return validateCaptcha.Item2;
+            }
+            var data = await _blsQueryBusiness.GetBLSCustomerByPassportNumber(model.PassportNumber, BlsAppointmentConstant.CountryId);
+            if (data.IsNotNull())
+            {
+                var userData = await _userBusiness.GetSingleById(data.UserId);
+                if (userData.IsNotNull())
+                {
+                    return Json(new { success = true, userId = userData.UserId });
+                }
+            }
+
+            return Json(new { success = false });
+        }
+
+
+
+    }
+
+
+
+}
+
