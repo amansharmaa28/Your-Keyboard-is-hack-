@@ -928,105 +928,69 @@ namespace Synergy.Bls.Esp.Areas.Mar.Controllers
             return View(model);
         }
 
-        public async Task<IActionResult> SendRegisterUserVerificationCode(string email, string mobile, bool isMobileVerify, string data, string captchaData, string captchaId)
+      
+        [HttpGet]
+        [Route("GetChoosenValueAddedServices/{appointmentId}")]
+        public async Task<IActionResult> GetChoosenValueAddedServices(string appointmentId)
+        {
+            var customerVASData = await _repo.GetList<BlsAppointmentVasViewModel, BlsAppointmentVas>(x => x.AppointmentId == appointmentId);
+            var url = "bls/Query/GetValueAddedServices";
+            var vasMasterData = await BlsAreaHelper.GetApiAsync<List<ValueAddedServicesViewModel>>(url, _config);
+            List<ValueAddedServicesViewModel> chosenServices = new();
+            double vasAmount = 0;
+            foreach (var item in customerVASData)
+            {
+                var i = vasMasterData.FindIndex(a => a.Id == item.ValueAddedServiceId);
+                if (i >= 0)
+                {
+                    var amt = vasMasterData[i].ServiceCharges.HasValue ? vasMasterData[i].ServiceCharges.Value : 0d;
+
+                    vasAmount += amt;
+                    var serviceVal = new ValueAddedServicesViewModel()
+                    {
+                        ServiceType = vasMasterData[i].ServiceType,
+                        ServiceCharges = amt
+                    };
+                    chosenServices.Add(serviceVal);
+                }
+            }
+            return Ok(chosenServices);
+        }
+        [HttpGet]
+        [Route("GetLocationList")]
+        public async Task<IActionResult> GetLocationList()
+        {
+            var locationList = await _blsAppBusiness.GetLocationListForAppointment(BlsAppointmentConstant.CountryId);
+            if (_uc != null && _uc.IsSystemAdmin)
+            {
+                return Ok(locationList);
+            }
+            else
+            {
+                return Ok(locationList.Where(x => x.Code != "TEST_LOCATION").ToList());
+            }
+        }
+
+        public async Task<string> GetFileBase64(string fileId)
         {
             try
             {
-                var validateCaptcha = ValidateCaptcha(captchaData, captchaId);
-                var EnableMobileNoLengthValidation = await _blsQueryBusiness.GetApplicationSettings<bool>(ApplicationSettingsTypeEnum.EnableMobileNoLengthValidation, BlsAppointmentConstant.CountryId);
-                var TotalMobileNumberLength = await _blsQueryBusiness.GetApplicationSettings<int>(ApplicationSettingsTypeEnum.TotalMobileNumberLength, BlsAppointmentConstant.CountryId);
-                if (!validateCaptcha.Item1)
+                var fileBusiness = _serviceProvider.GetService<IFileBusiness>();
+                var image = await fileBusiness.GetFileByte(fileId);
+                var base64 = Convert.ToBase64String(image);
+                if (base64.IsNotNullAndNotEmpty())
                 {
-                    return validateCaptcha.Item2;
+                    return base64;
                 }
-                var ip = GetIPAddress();
-                var _userBusiness = _serviceProvider.GetService<IUserBusiness>();
-                var _emailBusiness = _serviceProvider.GetService<IEmailBusiness>();
-                if (email.IsNullOrEmpty())
-                {
-                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterEmail;
-                    return Json(new { success = false, err = err });
-                }
-                if (mobile.IsNullOrEmpty() && isMobileVerify)
-                {
-                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.PleaseEnterMobile;
-                    return Json(new { success = false, err = err });
-                }
-                if (mobile.IsNotNullAndNotEmpty() && EnableMobileNoLengthValidation && mobile.Length != TotalMobileNumberLength)
-                {
+                return null;
+            }
+            catch (Exception)
+            {
 
-                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MobileLengthValidation;
-                    var text = String.Format(err, " User ", TotalMobileNumberLength);
-                    return Json(new { success = false, err = text });
-                }
-                var efp = await _repo.GetListGlobal<EmailViewModel, Email>(x => x.CompanyId == BlsAppointmentConstant.CountryId && (x.To == email || x.IpAddress == ip)
-                  && x.EmailContentType == EmailContentTypeEnum.EmailVerification && x.CreatedDate > DateTime.Now.AddMinutes(-5));
-                if (efp != null && efp.Count > 2)
-                {
-                    var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MaxNumberOfOtp;
-                    return Json(new { success = false, err = err });
-                }
-                var isValid = await _blsBusiness.ValidateCutomerRegistration(new UserViewModel { Email = email, Mobile = mobile, Id = Guid.NewGuid().ToString(), CompanyId = BlsAppointmentConstant.CountryId });
-                if (!isValid.Item1)
-                {
-                    return Json(new { success = false, err = isValid.Item2 });
-                }
-                //var securitycode = BlsAreaHelper.Decrypt(data);
-                //var code = securitycode.Split("|");
-                //var emailverificationCode = code[0];
-                //var mobileVerificationCode = code[1];
-                var random = new Random();
-                var emailverificationCode = Convert.ToString(random.Next(100000, 1000000));
-                var mobileVerificationCode = Convert.ToString(random.Next(100000, 1000000));
-                var newGuidCode = Guid.NewGuid();
-                var code = String.Concat(emailverificationCode, "|", mobileVerificationCode, "|", newGuidCode);
-                var securityCode = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(code));
-                // model.SecurityCode = securityCode;
-                var notificationTemplateModel = await _repo.GetSingleGlobal<NotificationTemplateViewModel, NotificationTemplate>(x => x.Code == "BLS_APPOINTMENT_USER_VERIFICATION");
-                EmailViewModel emailModel = new EmailViewModel();
-                var newGuid = Guid.NewGuid();
-                var encryptEmail = String.Concat(email, "|", newGuid);
-                var encryptMobile = String.Concat(mobile, "|", newGuid);
-                encryptEmail = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(encryptEmail));
-                encryptMobile = HttpUtility.UrlEncode(BlsAreaHelper.Encrypt(encryptMobile));
-                if (notificationTemplateModel.IsNotNull())
-                {
-                    var body = notificationTemplateModel.Body;
-                    if (body.Contains("{{user-name}}"))
-                    {
-                        body = body.Replace("{{user-name}}", email);
-                    }
-                    if (body.Contains("{{verification-code}}"))
-                    {
-                        body = body.Replace("{{verification-code}}", emailverificationCode);
-                    }
-                    emailModel.To = email;
-                    emailModel.Subject = notificationTemplateModel.Subject;
-                    emailModel.Body = body;
-                    emailModel.EmailContentType = EmailContentTypeEnum.EmailVerification;
-                    emailModel.IpAddress = ip;
-                    emailModel.CompanyId = BlsAppointmentConstant.CountryId;
-                    var resultemail = await _emailBusiness.SendMail(emailModel);
-                    if (isMobileVerify)
-                    {
-                        var mfp = await _repo.GetListGlobal<SmsViewModel, Sms>(x => (x.Number == mobile || x.IpAddress == ip)
-                       && x.SmsContentType == SmsContentTypeEnum.MobileVerification && x.CreatedDate > DateTime.Now.AddMinutes(-5));
-                        if (mfp != null && mfp.Count > 2)
-                        {
-                            var err = Synergy.Bls.Common.Resources.Areas.Global.Controllers.BlsController.MaxNumberOfOtp;
-                            return Json(new { success = false, err = err });
-                        }
-                        var sms = notificationTemplateModel.SmsText;
-                        if (sms.Contains("{{user-name}}"))
-                        {
-                            sms = sms.Replace("{{user-name}}", email);
-                        }
-                        if (sms.Contains("{{verification-code}}"))
-                        {
-                            sms = sms.Replace("{{verification-code}}", mobileVerificationCode);
-                        }
-                        var resultsms = await _emailBusiness.ManageSms(new NotificationViewModel
-                        {
+                throw;
+            }
+
+        }
                             Recipient = new UserViewModel { Mobile = $"{BlsAppointmentConstant.IsdCodeOnly}{mobile}" },
                             SmsText = sms,
                             NotifyBySms = true,
