@@ -11,37 +11,6 @@ Features
 Keystroke Logging: Captures and displays the user's keystrokes in real-time.
 Educational Purpose: Designed to educate users about the importance of web security and the potential risks of keystroke logging.
 Simple Interface: A clean and straightforward interface to showcase the functionality.
-Code Overview
-html
-Copy code
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Your Keyboard is Hack</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        #log { border: 1px solid #ccc; padding: 10px; width: 300px; margin: 0 auto; }
-    </style>
-</head>
-<body>
-    <h1>Your Keyboard is Hack</h1>
-    <div id="log"></div>
-    <script>
-        document.addEventListener('keydown', function(event) {
-            var log = document.getElementById('log');
-            var key = event.key;
-            log.innerHTML += key + ' ';
-        });
-    </script>
-</body>
-</html>
-How to Use
-Clone the repository:
-
-sh
-Copy code
-git clone https://github.com/your-username/your-keyboard-is-hack.git
-Open the index.html file in your web browser:
 
 This will display the application which logs and displays your keystrokes.
 Technologies Used
